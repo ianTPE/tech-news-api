@@ -114,24 +114,27 @@ export default async function handler(req: any, res: any) {
 
   function renderSaved(){
     savedWrap.style.display = saved.length ? '' : 'none';
-    savedList.innerHTML = saved.map(s => `<div class="item"><a href="${s.link}" target="_blank">${s.title}</a><div style="font-size:12px;color:#64748b">${s.summary}</div></div>`).join('');
+    savedList.innerHTML = saved
+      .map(function(s){
+        return '<div class="item"><a href="' + s.link + '" target="_blank">' + s.title + '</a><div style="font-size:12px;color:#64748b">' + s.summary + '</div></div>';
+      })
+      .join('');
   }
 
   function createCard(a){
     const el = document.createElement('div');
     el.className = 'card';
-    el.innerHTML = `
-      <div class="meta">${a.source||'The Verge'} · <span>${timeAgo(a.published)}</span></div>
-      <h2>${a.title}</h2>
-      <div class="sum">${a.summary}</div>
-      <div class="actions">
-        <button class="skip">略過</button>
-        <button class="save">收藏</button>
-        <a class="link" href="${a.link}" target="_blank">前往閱讀</a>
-      </div>
-      <div class="flag left">略過</div>
-      <div class="flag right">收藏</div>
-    `;
+    el.innerHTML =
+      '<div class="meta">' + (a.source || 'The Verge') + ' · <span>' + timeAgo(a.published) + '</span></div>' +
+      '<h2>' + a.title + '</h2>' +
+      '<div class="sum">' + a.summary + '</div>' +
+      '<div class="actions">' +
+        '<button class="skip">略過</button>' +
+        '<button class="save">收藏</button>' +
+        '<a class="link" href="' + a.link + '" target="_blank">前往閱讀</a>' +
+      '</div>' +
+      '<div class="flag left">略過</div>' +
+      '<div class="flag right">收藏</div>';
 
     // 拖曳/滑動
     let sx=0, sy=0, dx=0, dy=0;
@@ -143,7 +146,7 @@ export default async function handler(req: any, res: any) {
     }
     function onMove(e){
       if(sx===0 && sy===0) return; const p=e.touches? e.touches[0]:e; dx=p.clientX-sx; dy=p.clientY-sy;
-      el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx/20}deg)`;
+      el.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) rotate(' + (dx/20) + 'deg)';
       const alpha = Math.min(1, Math.abs(dx)/160);
       if(dx>0){ rightFlag.style.opacity = alpha; leftFlag.style.opacity = 0; }
       else { leftFlag.style.opacity = alpha; rightFlag.style.opacity = 0; }
@@ -157,7 +160,7 @@ export default async function handler(req: any, res: any) {
     }
     function dismiss(savedSide){
       el.style.transition='transform .25s, opacity .25s';
-      el.style.transform = `translate(${savedSide? 400:-400}px, 0) rotate(${savedSide? 15:-15}deg)`;
+      el.style.transform = 'translate(' + (savedSide ? 400 : -400) + 'px, 0) rotate(' + (savedSide ? 15 : -15) + 'deg)';
       el.style.opacity='0';
       setTimeout(next, 200);
     }
