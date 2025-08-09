@@ -28,21 +28,16 @@ export default async function handler(req: any, res: any) {
     .btn:active{transform:scale(.98)}
     .hint{color:var(--muted);font-size:12px;margin:4px 0 12px}
 
-    /* 卡堆 */
-    .stack{position:relative;height:70vh;min-height:420px}
-    .card{position:absolute;inset:0;background:var(--card);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:16px;display:flex;flex-direction:column}
-    .card h2{font-size:18px;margin:8px 0 6px}
+    /* 垂直列表 */
+    .stack{display:grid;grid-template-columns:1fr;gap:14px;padding-bottom:24px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:14px;display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:start}
+    .thumb{width:120px;height:120px;border-radius:12px;background:#e5e7eb;object-fit:cover}
+    .card h2{font-size:17px;margin:2px 0 6px}
     .meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px}
-    .sum{color:#334155;font-size:14px;line-height:1.5;margin-top:8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical}
-    .card .actions{margin-top:auto;display:flex;gap:8px}
-    .link{background:#111827;color:#fff;border-radius:12px;padding:10px 12px;text-decoration:none;font-size:14px;display:inline-flex;align-items:center;justify-content:center}
-    .skip{background:#fee2e2;color:#991b1b;border-radius:12px;padding:10px 12px;border:none}
-    .save{background:#dcfce7;color:#166534;border-radius:12px;padding:10px 12px;border:none}
-
-    /* 左右標籤 */
-    .flag{position:absolute;top:12px;padding:6px 10px;border-radius:10px;font-weight:600;font-size:12px;opacity:0;transition:opacity .15s}
-    .flag.left{left:12px;background:var(--danger);color:#fff}
-    .flag.right{right:12px;background:var(--brand);color:#fff}
+    .sum{color:#334155;font-size:14px;line-height:1.5;max-height:6lh;overflow:hidden}
+    .card .actions{margin-top:8px;display:flex;gap:8px}
+    .link{background:#111827;color:#fff;border-radius:10px;padding:8px 10px;text-decoration:none;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+    .save{background:#dcfce7;color:#166534;border-radius:10px;padding:8px 10px;border:none}
 
     /* 收藏清單 */
     .saved{margin-top:18px}
@@ -73,7 +68,7 @@ export default async function handler(req: any, res: any) {
         <a class="btn" href="?" id="reset">重設偏好</a>
       </div>
     </div>
-    <div class="hint">左右滑動卡片：右滑收藏、左滑略過。可用 ?api= 自訂資料來源。</div>
+    <div class="hint">上下捲動瀏覽卡片。可用 ?api= 自訂資料來源。</div>
     <div class="progress"><div class="bar" id="bar"></div></div>
 
     <div class="stack" id="stack"></div>
@@ -124,57 +119,19 @@ export default async function handler(req: any, res: any) {
   function createCard(a){
     const el = document.createElement('div');
     el.className = 'card';
+    const img = a.image ? '<img class="thumb" loading="lazy" src="' + a.image + '" alt="" />' : '<div class="thumb"></div>';
     el.innerHTML =
-      '<div class="meta">' + (a.source || 'The Verge') + ' · <span>' + timeAgo(a.published) + '</span></div>' +
-      '<h2>' + a.title + '</h2>' +
-      '<div class="sum">' + a.summary + '</div>' +
-      '<div class="actions">' +
-        '<button class="skip">略過</button>' +
-        '<button class="save">收藏</button>' +
-        '<a class="link" href="' + a.link + '" target="_blank">前往閱讀</a>' +
-      '</div>' +
-      '<div class="flag left">略過</div>' +
-      '<div class="flag right">收藏</div>';
-
-    // 拖曳/滑動
-    let sx=0, sy=0, dx=0, dy=0;
-    const leftFlag = el.querySelector('.flag.left');
-    const rightFlag = el.querySelector('.flag.right');
-
-    function onStart(e){
-      const p = e.touches? e.touches[0] : e; sx=p.clientX; sy=p.clientY; el.style.transition='';
-    }
-    function onMove(e){
-      if(sx===0 && sy===0) return; const p=e.touches? e.touches[0]:e; dx=p.clientX-sx; dy=p.clientY-sy;
-      el.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) rotate(' + (dx/20) + 'deg)';
-      const alpha = Math.min(1, Math.abs(dx)/160);
-      if(dx>0){ rightFlag.style.opacity = alpha; leftFlag.style.opacity = 0; }
-      else { leftFlag.style.opacity = alpha; rightFlag.style.opacity = 0; }
-    }
-    function onEnd(){
-      const TH = 120;
-      if(dx>TH){ doSave(a); dismiss(true); }
-      else if(dx<-TH){ dismiss(false); }
-      else { el.style.transition='transform .2s'; el.style.transform=''; leftFlag.style.opacity=0; rightFlag.style.opacity=0; }
-      sx=sy=dx=dy=0;
-    }
-    function dismiss(savedSide){
-      el.style.transition='transform .25s, opacity .25s';
-      el.style.transform = 'translate(' + (savedSide ? 400 : -400) + 'px, 0) rotate(' + (savedSide ? 15 : -15) + 'deg)';
-      el.style.opacity='0';
-      setTimeout(next, 200);
-    }
-
-    el.addEventListener('pointerdown', onStart);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerup', onEnd);
-    el.addEventListener('touchstart', onStart, {passive:true});
-    el.addEventListener('touchmove', onMove, {passive:true});
-    el.addEventListener('touchend', onEnd);
-
-    // 按鈕
-    el.querySelector('.skip').addEventListener('click', () => dismiss(false));
-    el.querySelector('.save').addEventListener('click', () => { doSave(a); dismiss(true); });
+      img +
+      '<div class="content">' +
+        '<div class="meta">' + (a.source || 'The Verge') + ' · <span>' + timeAgo(a.published) + '</span></div>' +
+        '<h2>' + a.title + '</h2>' +
+        '<div class="sum">' + a.summary + '</div>' +
+        '<div class="actions">' +
+          '<button class="save">收藏</button>' +
+          '<a class="link" href="' + a.link + '" target="_blank" rel="noopener">前往閱讀</a>' +
+        '</div>' +
+      '</div>';
+    el.querySelector('.save')!.addEventListener('click', function(){ doSave(a); });
     return el;
   }
 
@@ -184,17 +141,14 @@ export default async function handler(req: any, res: any) {
     renderSaved();
   }
 
-  function next(){
-    cursor++; updateProgress();
-    mountTopCard();
-  }
+  function next(){ cursor++; updateProgress(); renderList(); }
 
-  function mountTopCard(){
+  function renderList(){
     stack.innerHTML = '';
-    if(cursor >= order.length){ return; }
-    const a = data[order[cursor]];
-    const card = createCard(a);
-    stack.appendChild(card);
+    for (let i = cursor; i < order.length; i++) {
+      const a = data[order[i]];
+      stack.appendChild(createCard(a));
+    }
   }
 
   async function load(){
@@ -207,7 +161,7 @@ export default async function handler(req: any, res: any) {
       scored.sort((a,b)=>b.t-a.t);
       order = scored.map(x=>x.i);
       cursor = 0; updateProgress();
-      mountTopCard(); renderSaved();
+      renderList(); renderSaved();
     } catch(e){
       stack.innerHTML = '<div style="padding:16px;color:#b91c1c">載入失敗：'+(e && e.message? e.message: e)+'</div>';
     }

@@ -9,6 +9,23 @@ function safeParseDate(input?: string | null) {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
+function looksLikeImage(url: string): boolean {
+  return /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url);
+}
+
+function extractImageUrlFromItem(it: any): string {
+  try {
+    const enclosureUrl: string | undefined = it?.enclosure?.url || it?.enclosure?.url?.href;
+    if (enclosureUrl && (it?.enclosure?.type?.startsWith?.("image/") || looksLikeImage(enclosureUrl))) {
+      return enclosureUrl;
+    }
+    const html = String(it?.content || it?.["content:encoded"] || "");
+    const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (m && m[1]) return m[1];
+  } catch {}
+  return "";
+}
+
 // 以毫秒為單位的 sleep
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -64,6 +81,7 @@ export default async function handler(req: any, res: any) {
 
       // 去 HTML + 壓縮空白
       const text = rawContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const image = extractImageUrlFromItem(it);
 
       return {
         title: (it.title || "").trim(),
@@ -72,6 +90,7 @@ export default async function handler(req: any, res: any) {
         published: publishedAt ? publishedAt.toISOString() : "",
         summary: text.slice(0, 280),
         source: "The Verge",
+        image,
       };
     });
 
