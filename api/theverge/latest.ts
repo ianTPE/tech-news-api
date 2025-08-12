@@ -97,6 +97,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 抓取 RSS（含一次重試）
     const feed = await fetchFeedWithRetry(feedUrl, 1);
 
+    // 調試：記錄原始 RSS 項目數量
+    console.log(`RSS feed contains ${feed.items?.length || 0} items`);
+
     const items = (feed.items || []).map((it: any) => {
       const rawDate = it.isoDate || it.pubDate || it.date || "";
       const publishedAt = safeParseDate(rawDate);
@@ -120,6 +123,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
+    // 調試：記錄處理後的項目數量
+    console.log(`Processed ${items.length} items`);
+
     // 先排序（新→舊），缺日期排最後
     items.sort((a: any, b: any) => {
       const ta = a.publishedAt ? a.publishedAt.getTime() : -Infinity;
@@ -132,7 +138,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? items.filter((it: any) => it.publishedAt && it.publishedAt >= since!)
       : items;
 
+    // 調試：記錄過濾後的項目數量
+    console.log(`After filtering: ${filtered.length} items, requested limit: ${limit}`);
+
     const top = filtered.slice(0, limit).map(({ publishedAt, ...rest }: any) => rest);
+
+    // 調試：記錄最終返回的項目數量
+    console.log(`Final result: ${top.length} articles`);
 
     // Cache-Control: 1 分鐘
     res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=30");
