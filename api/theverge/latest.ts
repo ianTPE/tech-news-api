@@ -8,7 +8,18 @@ const ALLOWED_FEED_URLS = [
 ];
 
 const DEFAULT_FEED_URL = "https://www.theverge.com/rss/index.xml";
-const parser = new Parser();
+const parser = new Parser({
+  // 確保沒有內建限制
+  maxRedirects: 5,
+  timeout: 10000,
+  // 添加自定義解析器選項
+  customFields: {
+    item: [
+      ['media:content', 'media:content'],
+      ['media:thumbnail', 'media:thumbnail'],
+    ],
+  },
+});
 
 function safeParseDate(input?: string | null) {
   if (!input) return null;
@@ -40,9 +51,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // 簡單重試：處理 RSS 暫時性超時/連線中斷
 async function fetchFeedWithRetry(url: string, retries = 1) {
   try {
-    return await parser.parseURL(url);
+    console.log(`Fetching RSS feed from: ${url}`);
+    const result = await parser.parseURL(url);
+    console.log(`RSS feed fetched successfully. Raw items count: ${result.items?.length || 0}`);
+    return result;
   } catch (e) {
     if (retries <= 0) throw e;
+    console.log(`RSS fetch failed, retrying... (${retries} retries left)`);
     await sleep(400);
     return fetchFeedWithRetry(url, retries - 1);
   }
@@ -94,11 +109,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     // --------------------------------
 
+    console.log(`Request parameters - limit: ${limit}, since: ${since}, feedUrl: ${feedUrl}`);
+
     // 抓取 RSS（含一次重試）
     const feed = await fetchFeedWithRetry(feedUrl, 1);
 
     // 調試：記錄原始 RSS 項目數量
     console.log(`RSS feed contains ${feed.items?.length || 0} items`);
+    console.log(`Feed title: ${feed.title}`);
+    console.log(`Feed description: ${feed.description}`);
 
     const items = (feed.items || []).map((it: any) => {
       const rawDate = it.isoDate || it.pubDate || it.date || "";
