@@ -1,6 +1,12 @@
 import Parser from "rss-parser";
 
-const FEED_URL = "https://www.theverge.com/rss/index.xml";
+// 支援多來源的 RSS URL 白名單
+const ALLOWED_FEED_URLS = [
+  "https://www.theverge.com/rss/index.xml",
+  // 未來可在此添加更多允許的 RSS 來源
+];
+
+const DEFAULT_FEED_URL = "https://www.theverge.com/rss/index.xml";
 const parser = new Parser();
 
 function safeParseDate(input?: string | null) {
@@ -15,7 +21,8 @@ function looksLikeImage(url: string): boolean {
 
 function extractImageUrlFromItem(it: any): string {
   try {
-    const enclosureUrl: string | undefined = it?.enclosure?.url || it?.enclosure?.url?.href;
+    // 簡化 enclosure URL 處理：多數 RSS 是字串，不是物件
+    const enclosureUrl = typeof it?.enclosure?.url === "string" ? it.enclosure.url : "";
     if (enclosureUrl && (it?.enclosure?.type?.startsWith?.("image/") || looksLikeImage(enclosureUrl))) {
       return enclosureUrl;
     }
@@ -42,6 +49,22 @@ async function fetchFeedWithRetry(url: string, retries = 1) {
   }
 }
 
+// 驗證 RSS URL 是否在白名單中
+function validateFeedUrl(url: string): string {
+  if (!url || typeof url !== "string") {
+    return DEFAULT_FEED_URL;
+  }
+  
+  // 檢查是否在白名單中
+  if (ALLOWED_FEED_URLS.includes(url)) {
+    return url;
+  }
+  
+  // 不在白名單中，回傳預設值
+  console.warn(`Blocked unauthorized RSS URL: ${url}`);
+  return DEFAULT_FEED_URL;
+}
+
 // Vercel Serverless Function
 export default async function handler(req: any, res: any) {
   // CORS
@@ -51,6 +74,9 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(204).end();
 
   try {
+    // 支援多來源：從 req.query.url 讀取並做白名單驗證
+    const feedUrl = validateFeedUrl(req.query.url);
+
     // limit：數值防呆與範圍限制 [1, 50]
     const rawLimit = Number.parseInt(String(req.query.limit ?? "20"), 10);
     const limit = Number.isFinite(rawLimit)
@@ -69,7 +95,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // 抓取 RSS（含一次重試）
-    const feed = await fetchFeedWithRetry(FEED_URL, 1);
+    const feed = await fetchFeedWithRetry(feedUrl, 1);
 
     const items = (feed.items || []).map((it: any) => {
       const rawDate = it.isoDate || it.pubDate || it.date || "";
@@ -117,12 +143,24 @@ export default async function handler(req: any, res: any) {
       articles: top,
     });
   } catch (err: any) {
-    console.error(err);
-    return res.status(500).json({
-      error: "Failed to fetch or parse The Verge RSS",
+    console.error("RSS fetch error:", err);
+    
+    // 改善錯誤回應：加上 status 或 stack（避免洩漏敏感資訊）
+    const errorResponse: any = {
+      error: "Failed to fetch or parse RSS feed",
       detail: err?.message || String(err),
       fetched_at: new Date().toISOString(),
-    });
+    };
+    
+    // 只在開發環境或特定條件下加入 stack trace
+    if (process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "development") {
+      errorResponse.stack = err?.stack;
+    }
+    
+    // 加入 HTTP status code 方便除錯
+    errorResponse.status = err?.status || err?.statusCode || 500;
+    
+    return res.status(500).json(errorResponse);
   }
 }
 
