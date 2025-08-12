@@ -1,3 +1,4 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Parser from "rss-parser";
 
 // 支援多來源的 RSS URL 白名單
@@ -34,9 +35,7 @@ function extractImageUrlFromItem(it: any): string {
 }
 
 // 以毫秒為單位的 sleep
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // 簡單重試：處理 RSS 暫時性超時/連線中斷
 async function fetchFeedWithRetry(url: string, retries = 1) {
@@ -66,7 +65,7 @@ function validateFeedUrl(url: string): string {
 }
 
 // Vercel Serverless Function
-export default async function handler(req: any, res: any) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -75,24 +74,25 @@ export default async function handler(req: any, res: any) {
 
   try {
     // 支援多來源：從 req.query.url 讀取並做白名單驗證
-    const feedUrl = validateFeedUrl(req.query.url);
+    const qUrl = req.query.url ?? null;
+    const urlStr = Array.isArray(qUrl) ? qUrl[0] : qUrl;
+    const feedUrl = validateFeedUrl(urlStr);
 
-    // limit：數值防呆與範圍限制 [1, 50]
-    const rawLimit = Number.parseInt(String(req.query.limit ?? "20"), 10);
-    const limit = Number.isFinite(rawLimit)
-      ? Math.min(Math.max(rawLimit, 1), 50)
-      : 20;
+    // ---- 這裡做「陣列安全」處理 ----
+    const qLimit = req.query.limit ?? "20";
+    const limitStr = Array.isArray(qLimit) ? qLimit[0] : qLimit;
+    const rawLimit = Number.parseInt(String(limitStr), 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 50) : 20;
 
-    // since：若是 YYYY-MM-DD 形式，補上台北時區避免被當成 UTC 零時
-    const sinceParam = req.query.since ? String(req.query.since) : null;
+    const qSince = req.query.since ?? null;
+    const sinceStr = Array.isArray(qSince) ? qSince[0] : qSince;
     let since: Date | null = null;
-    if (sinceParam) {
-      const normalized = /\d{4}-\d{2}-\d{2}$/.test(sinceParam)
-        ? `${sinceParam}T00:00:00+08:00`
-        : sinceParam;
+    if (sinceStr) {
+      const normalized = /\d{4}-\d{2}-\d{2}$/.test(sinceStr) ? `${sinceStr}T00:00:00+08:00` : sinceStr;
       const d = new Date(normalized);
-      since = Number.isFinite(d.getTime()) ? d : null; // 非法字串時，不套用 since 過濾
+      since = Number.isFinite(d.getTime()) ? d : null;
     }
+    // --------------------------------
 
     // 抓取 RSS（含一次重試）
     const feed = await fetchFeedWithRetry(feedUrl, 1);
